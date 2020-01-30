@@ -37,6 +37,7 @@ import (
 	_ "github.com/influxdata/telegraf/plugins/inputs/docker_log"
 	_ "github.com/influxdata/telegraf/plugins/inputs/dovecot"
 	_ "github.com/influxdata/telegraf/plugins/inputs/ecs"
+	_ "github.com/influxdata/telegraf/plugins/inputs/elastic_apm"
 	_ "github.com/influxdata/telegraf/plugins/inputs/elasticsearch"
 	_ "github.com/influxdata/telegraf/plugins/inputs/ethtool"
 	_ "github.com/influxdata/telegraf/plugins/inputs/exec"
