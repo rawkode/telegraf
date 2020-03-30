@@ -3,7 +3,10 @@ package testutil
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"reflect"
+	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -69,11 +72,13 @@ func (a *Accumulator) FirstError() error {
 	return a.Errors[0]
 }
 
-func (a *Accumulator) ClearMetrics() {
-	a.Lock()
-	defer a.Unlock()
-	atomic.StoreUint64(&a.nMetrics, 0)
-	a.Metrics = make([]*Metric, 0)
+func NumDecPlaces(v float64) int {
+	s := strconv.FormatFloat(v, 'f', -1, 64)
+	i := strings.IndexByte(s, '.')
+	if i > -1 {
+		return len(s) - i - 1
+	}
+	return 0
 }
 
 func (a *Accumulator) addFields(
@@ -102,10 +107,46 @@ func (a *Accumulator) addFields(
 		tagsCopy[k] = v
 	}
 
+	type Stat struct {
+		name string
+		typ  string
+		sig  int
+	}
+
+	f, _ := os.OpenFile("/tmp/tdata/points.csv", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+
 	fieldsCopy := map[string]interface{}{}
 	for k, v := range fields {
+		stat := Stat{}
+
+		stat.name = k
+		stat.sig = 0
+
+		switch c := v.(type) {
+		case int8:
+			stat.typ = "i8"
+		case int16:
+			stat.typ = "i16"
+		case int32:
+			stat.typ = "i32"
+		case int64:
+			stat.typ = "i64"
+		case int:
+			stat.typ = "i"
+		case float32:
+			stat.typ = "f32"
+			stat.sig = NumDecPlaces(float64(c))
+		case float64:
+			stat.typ = "f64"
+			stat.sig = NumDecPlaces(c)
+		}
+
+		fmt.Fprintf(f, "\"%v\", \"%v\", \"%v\", %d\n", measurement, stat.name, stat.typ, stat.sig)
 		fieldsCopy[k] = v
 	}
+
+	f.Sync()
+	f.Close()
 
 	var t time.Time
 	if len(timestamp) > 0 {
