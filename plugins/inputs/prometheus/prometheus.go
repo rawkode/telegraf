@@ -56,8 +56,12 @@ type Prometheus struct {
 	client *http.Client
 
 	// Should we scrape Kubernetes services for prometheus annotations
-	MonitorPods    bool   `toml:"monitor_kubernetes_pods"`
-	PodNamespace   string `toml:"monitor_kubernetes_pods_namespace"`
+	MonitorPods  bool   `toml:"monitor_kubernetes_pods"`
+	PodNamespace string `toml:"monitor_kubernetes_pods_namespace"`
+	// Should we scrape Kubernetes services defined by ServiceMonitor CRDs
+	// Example: https://github.com/coreos/kube-prometheus/blob/master/manifests/prometheus-operator-serviceMonitor.yaml
+	MonitorServiceMonitors bool `toml:"monitor_kubernetes_service_monitors"`
+
 	lock           sync.Mutex
 	kubernetesPods map[string]URLAndAddress
 	cancel         context.CancelFunc
@@ -93,6 +97,8 @@ var sampleConfig = `
   ## - prometheus.io/path: If the metrics path is not /metrics, define it with this annotation.
   ## - prometheus.io/port: If port is not 9102 use this annotation
   # monitor_kubernetes_pods = true
+  ## Scrape Kubernetes Pods from ServiceMonitor CRDs
+  # monitor_kubernetes_service_monitors = true
   ## Restricts Kubernetes monitoring to a single namespace
   ##   ex: monitor_kubernetes_pods_namespace = "default"
   # monitor_kubernetes_pods_namespace = ""

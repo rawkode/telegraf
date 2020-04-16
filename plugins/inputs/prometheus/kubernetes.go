@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	promop "github.com/coreos/prometheus-operator/pkg/apis/monitoring/v1"
 	"github.com/ericchiang/k8s"
 	corev1 "github.com/ericchiang/k8s/apis/core/v1"
 	"github.com/ghodss/yaml"
@@ -58,21 +59,44 @@ func (p *Prometheus) start(ctx context.Context) error {
 
 	p.wg = sync.WaitGroup{}
 
-	p.wg.Add(1)
-	go func() {
-		defer p.wg.Done()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-time.After(time.Second):
-				err := p.watch(ctx, client)
-				if err != nil {
-					p.Log.Errorf("Unable to watch resources: %s", err.Error())
+	if p.MonitorPods {
+		p.wg.Add(1)
+		go func() {
+			defer p.wg.Done()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-time.After(time.Second):
+					err := p.watchPods(ctx, client)
+					if err != nil {
+						p.Log.Errorf("Unable to watch resources: %s", err.Error())
+					}
 				}
 			}
-		}
-	}()
+		}()
+	}
+
+	if p.MonitorServiceMonitors {
+		promop.SchemeGroupVersion.String()
+		k8s.Register(promop.SchemeGroupVersion.Group, promop.SchemeGroupVersion.Version, "servicemonitors", true, &ServiceMonitor{})
+
+		p.wg.Add(1)
+		go func() {
+			defer p.wg.Done()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-time.After(time.Second):
+					err := p.watchServiceMonitors(ctx, client)
+					if err != nil {
+						p.Log.Errorf("Unable to watch resources: %s", err.Error())
+					}
+				}
+			}
+		}()
+	}
 
 	return nil
 }
@@ -81,7 +105,7 @@ func (p *Prometheus) start(ctx context.Context) error {
 // (without the scrape annotations). K8s may re-assign the old pod ip to the non-scrape
 // pod, causing errors in the logs. This is only true if the pod going offline is not
 // directed to do so by K8s.
-func (p *Prometheus) watch(ctx context.Context, client *k8s.Client) error {
+func (p *Prometheus) watchPods(ctx context.Context, client *k8s.Client) error {
 
 	selectors := podSelector(p)
 
@@ -124,6 +148,54 @@ func (p *Prometheus) watch(ctx context.Context, client *k8s.Client) error {
 			}
 		}
 	}
+}
+
+func (p *Prometheus) watchServiceMonitors(ctx context.Context, client *k8s.Client) error {
+	watcher, err := client.Watch(ctx, p.PodNamespace, &promop.ServiceMonitor{})
+
+	return nil
+
+	// selectors := podSelector(p)
+
+	// pod := &corev1.Pod{}
+	// watcher, err := client.Watch(ctx, p.PodNamespace, &corev1.Pod{}, selectors...)
+	// if err != nil {
+	// 	return err
+	// }
+	// defer watcher.Close()
+
+	// for {
+	// 	select {
+	// 	case <-ctx.Done():
+	// 		return nil
+	// 	default:
+	// 		pod = &corev1.Pod{}
+	// 		// An error here means we need to reconnect the watcher.
+	// 		eventType, err := watcher.Next(pod)
+	// 		if err != nil {
+	// 			return err
+	// 		}
+
+	// 		// If the pod is not "ready", there will be no ip associated with it.
+	// 		if pod.GetMetadata().GetAnnotations()["prometheus.io/scrape"] != "true" ||
+	// 			!podReady(pod.Status.GetContainerStatuses()) {
+	// 			continue
+	// 		}
+
+	// 		switch eventType {
+	// 		case k8s.EventAdded:
+	// 			registerPod(pod, p)
+	// 		case k8s.EventModified:
+	// 			// To avoid multiple actions for each event, unregister on the first event
+	// 			// in the delete sequence, when the containers are still "ready".
+	// 			if pod.Metadata.GetDeletionTimestamp() != nil {
+	// 				unregisterPod(pod, p)
+	// 			} else {
+	// 				registerPod(pod, p)
+	// 			}
+	// 		}
+	// 	}
+	// }
 }
 
 func podReady(statuss []*corev1.ContainerStatus) bool {
